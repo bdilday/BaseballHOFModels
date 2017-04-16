@@ -1,0 +1,32 @@
+
+
+load('./data/br_war.RData')
+bb <- get_lahman_batting()
+bb <- append_age(bb)
+bb <- append_br_war(bb, war=br_war$BattingWAR)
+bb <- append_pos(bb)
+bb <- append_hof(bb)
+fit_df <- get_fit_data(bb)
+
+
+do_hof_fit <- function(fit_df) {
+  frm <- as.formula(inducted ~ . - playerID - votedBy)
+
+  xx = model.matrix(frm, data=fit_df)[,-1]
+  yy = fit_df$inducted
+
+  cl <- makeCluster(detectCores())
+  registerDoParallel(cl)
+
+  set.seed(825)
+  cv_train <- trainControl(method = "cv", number = 10)
+  repeated_cv_train <- trainControl(method = "repeatedcv", number = 5, repeats=5)
+
+  gbmFit1 <- train(xx, yy, method = "gbm", trControl = cv_train, verbose = FALSE)
+  xgbFit1 <- train(xx, yy, method = "xgbLinear", trControl = fit_control, verbose = FALSE)
+
+  stopCluster(cl)
+}
+
+
+

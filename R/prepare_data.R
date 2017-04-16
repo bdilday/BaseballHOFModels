@@ -7,6 +7,7 @@ library(glmnet)
 library(caret)
 library(caretEnsemble)
 library(magrittr)
+library(doParallel)
 
 #' returns a data frame with batting stats, aggregating over stints
 get_lahman_batting <- function() {
@@ -91,6 +92,12 @@ get_primary_pos <- function() {
     dplyr::select(playerID, POS)
 }
 
+append_pos <- function(.data) {
+  pp = get_primary_pos()
+  .data %>% merge(pp) %>% mutate(POS=as.factor(POS))
+}
+
+
 #' Append age to a data frame based on Lahman::Master playerID
 append_age <- function(.data) {
   .data %>%
@@ -101,32 +108,74 @@ append_age <- function(.data) {
 #' append HOF status: inducted = (TRUE, FALSE)
 #' TODO: specify as 1 of 4 categories; 1st ballot, BBWAA, Veterns, No
 append_hof <- function(.data) {
-  .data %>% Lahman::HallOfFame %>%
+  hofers <- Lahman::HallOfFame %>%
     dplyr::filter(inducted=='Y',
-                  category=='Player',
-                  votedBy %in% c("BBWAA", "Special Election")) %>%
-    dplyr::select(playerID, inducted) %>%
+                  category=='Player') %>%
+    dplyr::select(playerID, inducted, votedBy)
+
+  .data %>% merge(hofers, by="playerID", all.x=TRUE) %>%
     replace_na(list(inducted='N')) %>%
-    mutate(inducted=as.factor(inducted))
+    replace_na(list(votedBy='N')) %>%
+    mutate(votedBy=ifelse(votedBy %in% c("BBWAA", "Special Election"), "BBWAA", votedBy)) %>%
+    mutate(votedBy=ifelse(votedBy %in% c("BBWAA", "N"), votedBy, "VetCom")) %>%
+    mutate(inducted=as.factor(inducted), votedBy=as.factor(votedBy))
 }
 
 #' append batting war
 append_br_war <- function(.data, war) {
-  .data %>% merge(war %>%
-                    dplyr::select(player_ID, WAA, WAR, WAR_off, WAR_def, year_ID, stint_ID) %>%
-                    combine_war_stints() %>%
-                    dplyr::rename(bbrefID=player_ID, yearID=year_ID)
-  )
+  tmp <- war %>%
+    dplyr::select(player_ID, WAA, WAR, WAR_off, WAR_def, year_ID, stint_ID)
+
+  tmp <- tmp %>%
+    combine_war_stints() %>%
+    dplyr::rename(bbrefID=player_ID, yearID=year_ID)
+
+  .data %>% merge(tmp)
 }
 
 
+#' append WS wins
+append_all_star <- function(.data) {
+
+  all_stars <- Lahman::AllstarFull %>%
+    mutate(AllStar='Y',
+           AllstarStart=ifelse(is.na(StartingPos), 'N', 'Y')) %>%
+    select(playerID, yearID, AllStar, AllstarStart)
+
+  .data %>% merge(all_stars, by=c("playerID", "yearID")) %>%
+    replace_na(list(AllStar='N', AllStarStart='N'))
+}
+
+
+#' append WS wins
+append_ws_wins <- function(.data) {
+
+  all_players <- Lahman::Appearances %>%
+    group_by(playerID, yearID) %>%
+    mutate(rr=row_number()) %>%
+    filter(rr==max(rr)) %>%
+    select(playerID, yearID, teamID)
+
+  ws_winners <- Lahman::Teams %>%
+    filter(WSWin == 'Y') %>%
+    select(yearID, teamID, WSWin)
+
+  ws_players <- merge(all_players, ws_winners, by=c("yearID", "teamID")) %>%
+    select(playerID, yearID, WSWin)
+
+  ee = merge(.data, ws_players, by=c("yearID", "playerID"), all.x=TRUE) %>%
+    replace_na(list(WSWin='N'))
+}
+
 #' fit data
 #' takes the top MAXYEAR seasons, ordered by ORDER_KEY and
-#' returns teh value of LIST_OF_STATS. If less than MAXYEAR has been played, filled in with 0
+#' returns the value of LIST_OF_STATS. If less than MAXYEAR has been played, filled in with 0
 get_fit_data <- function(.data,
                          MAXYEAR=20,
                          LIST_OF_STATS=NULL,
-                         ORDER_KEY="WAA") {
+                         ORDER_KEY="WAA",
+                         final_game_min='1901-01-01',
+                         final_game_max='2006-01-01') {
 
   kitchen_sink <- c("AB", "BB", "CS", "G", "GIDP",
                     "HBP", "HR", "IBB", "BR",
@@ -135,18 +184,19 @@ get_fit_data <- function(.data,
   war_and_fip <- c("PA", "BB", "SO", "WAA", "WAR", "WAR_off", "WAR_def")
 
   if (is.null(LIST_OF_STATS)) {
-    LIST_OF_STATS <- kitchen_sink
+    LIST_OF_STATS <- war_and_fip
   }
 
   kk = .data %>%
+    dplyr::filter(finalGame>=final_game_min, finalGame<=final_game_max) %>%
     mutate(ORDER_KEY=ORDER_KEY) %>%
-    dplyr::arrange_(playerID, ORDER_KEY) %>%
-    dplyr::select(-ORDER_KEY)
+    dplyr::arrange(playerID, ORDER_KEY) %>%
+    dplyr::select(-ORDER_KEY) %>%
     dplyr::group_by(playerID) %>%
     dplyr::mutate(nyear=row_number()) %>%
     dplyr::ungroup() %>%
-    dplyr::filter(nyear>=1, nyear <= maxyear)
-  kk <- kk[,c("playerID", "yearID", "nyear", list_of_stats, "POS", "inducted")]
+    dplyr::filter(nyear>=1, nyear <= MAXYEAR)
+  kk <- kk[,c("playerID", "yearID", "nyear", LIST_OF_STATS, "POS", "inducted")]
 
   kk %<>%
     gather(key, value, -playerID, -yearID, -nyear, -POS, -inducted) %>%
@@ -164,10 +214,4 @@ get_fit_data <- function(.data,
   kk
 
 }
-
-
-#fit_control <- trainControl(method = "cv", number = 10)
-#set.seed(825)
-# gbmFit1 <- train(xx, yy, method = "gbm", trControl = fit_control, verbose = FALSE)
-# xgbFit1 <- train(xx, yy, method = "xgbLinear", trControl = fit_control, verbose = FALSE)
 
