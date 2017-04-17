@@ -1,11 +1,31 @@
 
 
 load('./data/br_war.RData')
+
 bb <- get_lahman_batting()
+bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
+
 bb <- append_age(bb)
+bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
+
 bb <- append_br_war(bb, war=br_war$BattingWAR)
+bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
+
 bb <- append_pos(bb)
+bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
+
 bb <- append_hof(bb)
+bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
+
+bb <- append_ws_wins(bb)
+bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
+
+bb <- append_mvps(bb)
+bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
+
+bb <- append_all_star(bb)
+bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
+
 fit_df <- get_fit_data(bb)
 
 

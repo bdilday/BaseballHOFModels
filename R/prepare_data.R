@@ -89,7 +89,8 @@ get_primary_pos <- function() {
     dplyr::arrange(playerID, -ngame) %>%
     dplyr::mutate(pos_rank=row_number()) %>%
     dplyr::filter(pos_rank==1) %>%
-    dplyr::select(playerID, POS)
+    dplyr::select(playerID, POS) %>%
+    ungroup()
 }
 
 append_pos <- function(.data) {
@@ -130,20 +131,50 @@ append_br_war <- function(.data, war) {
     combine_war_stints() %>%
     dplyr::rename(bbrefID=player_ID, yearID=year_ID)
 
+  tmp <- tmp %>%
+    group_by(yearID) %>%
+    arrange(-WAA) %>%
+    mutate(WAA_rank=row_number()) %>%
+    ungroup()
+
   .data %>% merge(tmp)
 }
 
+
+#' append MVPs
+append_mvps <- function(.data) {
+
+  mvps <- Lahman::AwardsPlayers %>%
+    dplyr::filter(awardID=='Most Valuable Player') %>%
+    dplyr::mutate(MVPWin='Y') %>%
+    dplyr::select(playerID, yearID, MVPWin)
+
+  mvp_shares <- Lahman::AwardsSharePlayers %>%
+    dplyr::filter(awardID=='MVP') %>%
+    dplyr::mutate(MVPShare=pointsWon/pointsMax) %>%
+    dplyr::select(playerID, yearID, MVPShare)
+
+  kk <- .data %>%
+    merge(mvps, by=c("playerID", "yearID"), all.x=TRUE) %>%
+    replace_na(list(MVPWin='N')) %>%
+    merge(mvp_shares, by=c("playerID", "yearID"), all.x=TRUE) %>%
+    replace_na(list(MVPShare=0.0)) %>%
+    dplyr::mutate(MVPWin = as.factor(MVPWin))
+}
 
 #' append WS wins
 append_all_star <- function(.data) {
 
   all_stars <- Lahman::AllstarFull %>%
+    group_by(playerID, yearID) %>%
+    summarise(startingPos=max(startingPos)) %>%
     mutate(AllStar='Y',
-           AllstarStart=ifelse(is.na(StartingPos), 'N', 'Y')) %>%
-    select(playerID, yearID, AllStar, AllstarStart)
+           AllStarStart=ifelse(is.na(startingPos), 'N', 'Y')) %>%
+    select(playerID, yearID, AllStar, AllStarStart)
 
-  .data %>% merge(all_stars, by=c("playerID", "yearID")) %>%
-    replace_na(list(AllStar='N', AllStarStart='N'))
+  .data %>% merge(all_stars, by=c("playerID", "yearID"), all.x=TRUE) %>%
+    replace_na(list(AllStar='N', AllStarStart='N')) %>%
+    mutate(AllStar=as.factor(AllStar), AllStarStart=as.factor(AllStarStart))
 }
 
 
@@ -164,7 +195,7 @@ append_ws_wins <- function(.data) {
     select(playerID, yearID, WSWin)
 
   ee = merge(.data, ws_players, by=c("yearID", "playerID"), all.x=TRUE) %>%
-    replace_na(list(WSWin='N'))
+    replace_na(list(WSWin='N')) %>% mutate(WSWin=as.factor(WSWin))
 }
 
 #' fit data
@@ -181,16 +212,20 @@ get_fit_data <- function(.data,
                     "HBP", "HR", "IBB", "BR",
                     "PA", "R", "RBI", "SB", "SF", "SH", "SO", "TB",
                     "wwoba", "X1B", "X2B", "X3B", "Age", "WAA", "WAR", "WAR_off", "WAR_def")
-  war_and_fip <- c("PA", "BB", "SO", "WAA", "WAR", "WAR_off", "WAR_def")
+  war_and_fip <- c("PA", "BB", "SO", "WAA", "WAA_rank", "WAR", "WAR_off", "WAR_def")
+  grit <- c("AllStar", "AllStarStart", "WSWin", "MVPWin", "MVPShare")
 
   if (is.null(LIST_OF_STATS)) {
-    LIST_OF_STATS <- war_and_fip
+    LIST_OF_STATS <- c(war_and_fip, grit)
   }
 
-  kk = .data %>%
-    dplyr::filter(finalGame>=final_game_min, finalGame<=final_game_max) %>%
-    mutate(ORDER_KEY=ORDER_KEY) %>%
-    dplyr::arrange(playerID, ORDER_KEY) %>%
+  kk <- .data %>%
+    dplyr::filter(finalGame>=final_game_min, finalGame<=final_game_max)
+
+  kk$ORDER_KEY <- kk[[ORDER_KEY]]
+
+  kk <- kk %>%
+    dplyr::arrange(playerID, -ORDER_KEY) %>%
     dplyr::select(-ORDER_KEY) %>%
     dplyr::group_by(playerID) %>%
     dplyr::mutate(nyear=row_number()) %>%
@@ -199,7 +234,12 @@ get_fit_data <- function(.data,
   kk <- kk[,c("playerID", "yearID", "nyear", LIST_OF_STATS, "POS", "inducted")]
 
   kk %<>%
-    gather(key, value, -playerID, -yearID, -nyear, -POS, -inducted) %>%
+    gather(key, value,
+           -playerID,
+           -yearID,
+           -nyear,
+           -POS,
+           -inducted) %>%
     mutate(new_key=paste(key, nyear, sep='_'))
 
   kk %<>%
