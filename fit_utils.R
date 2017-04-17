@@ -26,14 +26,20 @@ bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
 bb <- append_all_star(bb)
 bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
 
-fit_df <- get_fit_data(bb)
+tmp <- bb %>% filter(POS!='P')
+fit_df_train <- get_fit_data(tmp, final_game_min='1901-01-01', final_game_max='2006-01-01') %>% filter(PA_1>=30)
+fit_df_test <- get_fit_data(tmp, final_game_min='2006-01-01', final_game_max='2016-01-01') %>% filter(PA_1>=30)
 
 
 do_hof_fit <- function(fit_df) {
-  frm <- as.formula(inducted ~ . - playerID - votedBy)
+  frm <- as.formula(inducted ~ . - playerID)
 
-  xx = model.matrix(frm, data=fit_df)[,-1]
-  yy = fit_df$inducted
+  tmp <- fit_df_train
+  xx = model.matrix(frm, data=tmp)[,-1]
+  yy = tmp$inducted
+
+  xx_test <- model.matrix(frm,data=df_fit_test)[,-1]
+  xx_test <- df_fit_test$inducted
 
   cl <- makeCluster(detectCores())
   registerDoParallel(cl)
@@ -42,8 +48,8 @@ do_hof_fit <- function(fit_df) {
   cv_train <- trainControl(method = "cv", number = 10)
   repeated_cv_train <- trainControl(method = "repeatedcv", number = 5, repeats=5)
 
-  gbmFit1 <- train(xx, yy, method = "gbm", trControl = cv_train, verbose = FALSE)
-  xgbFit1 <- train(xx, yy, method = "xgbLinear", trControl = fit_control, verbose = FALSE)
+  #gbmFit1 <- train(xx, yy, method = "gbm", trControl = cv_train, verbose = FALSE)
+  xgbFit1 <- train(xx, yy, method = "xgbLinear", trControl = cv_train, verbose = FALSE)
 
   stopCluster(cl)
 }

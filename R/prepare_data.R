@@ -159,7 +159,7 @@ append_mvps <- function(.data) {
     replace_na(list(MVPWin='N')) %>%
     merge(mvp_shares, by=c("playerID", "yearID"), all.x=TRUE) %>%
     replace_na(list(MVPShare=0.0)) %>%
-    dplyr::mutate(MVPWin = as.factor(MVPWin))
+    dplyr::mutate(MVPWin = ifelse(MVPWin=='Y', 1, 0), MPVWin=as.numeric(MVPWin))
 }
 
 #' append WS wins
@@ -174,7 +174,9 @@ append_all_star <- function(.data) {
 
   .data %>% merge(all_stars, by=c("playerID", "yearID"), all.x=TRUE) %>%
     replace_na(list(AllStar='N', AllStarStart='N')) %>%
-    mutate(AllStar=as.factor(AllStar), AllStarStart=as.factor(AllStarStart))
+    mutate(AllStar=as.numeric(ifelse(AllStar=='Y', 1, 0)),
+           AllStarStart=as.numeric(ifelse(AllStarStart=='Y', 1, 0))
+           )
 }
 
 
@@ -195,7 +197,9 @@ append_ws_wins <- function(.data) {
     select(playerID, yearID, WSWin)
 
   ee = merge(.data, ws_players, by=c("yearID", "playerID"), all.x=TRUE) %>%
-    replace_na(list(WSWin='N')) %>% mutate(WSWin=as.factor(WSWin))
+    replace_na(list(WSWin='N')) %>%
+    mutate(WSWin=as.numeric(ifelse(WSWin=='Y', 1, 0)))
+
 }
 
 #' fit data
@@ -233,7 +237,10 @@ get_fit_data <- function(.data,
     dplyr::filter(nyear>=1, nyear <= MAXYEAR)
   kk <- kk[,c("playerID", "yearID", "nyear", LIST_OF_STATS, "POS", "inducted")]
 
-  kk %<>%
+  col_numerics <- names(kk)[sapply(kk, is.numeric)]
+  col_factors <- names(kk)[sapply(kk, is.factor)]
+
+  kkg <- kk %>%
     gather(key, value,
            -playerID,
            -yearID,
@@ -242,16 +249,34 @@ get_fit_data <- function(.data,
            -inducted) %>%
     mutate(new_key=paste(key, nyear, sep='_'))
 
-  kk %<>%
+  kkg %<>%
     select(-key, -nyear, -yearID) %>%
     spread(new_key, value, fill=0)
 
+  #TODO: find a better way to accomplish this
+  # specifically, because I'm gathering both numeric and factor columns,
+  # everything gets cast as character, and need to convert back
+  for (s in col_numerics) {
+    kkg %<>% mutate_each(funs(as.numeric), starts_with(s))
+  }
+
+  for (s in col_factors) {
+    kkg %<>% mutate_each(funs(as.factor), starts_with(s))
+  }
+
+  col_factors <- names(kkg)[sapply(kkg, is.factor)]
+  for (s in col_factors) {
+    print(s)
+    print(levels(kkg[[s]]))
+
+    if ("0" %in% levels(kkg[[s]])){
+      kkg[kkg[[s]] == "0",][[s]] = "N"
+      kkg[[s]] <- droplevels(kkg)[[s]]
+    }
+  }
+
   # ineligible
-  kk %<>% filter(playerID!='rosepe01', playerID!='jacksjo01')
-
-  kk$POS <- as.factor(kk$POS)
-
-  kk
+  kkg %>% filter(playerID!='rosepe01', playerID!='jacksjo01')
 
 }
 
