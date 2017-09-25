@@ -51,6 +51,12 @@ combine_lahman_pitching_stints <- function(batting) {
 
 combine_lahman_batting_stints <- function(batting) {
   batting %>%
+    dplyr::mutate(BASIC_WOBA =
+                    0.7*BB +
+                    0.9*(H-X2B-X3B-HR) +
+                    1.25*X2B +
+                    1.6*X3B +
+                    2.0*HR) %>%
     dplyr::mutate(wwoba=BASIC_WOBA*PA) %>%
     gather(key, value, -playerID, -yearID, -stint, -teamID, -lgID) %>%
     dplyr::group_by(playerID, yearID, key) %>%
