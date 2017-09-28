@@ -205,7 +205,25 @@ append_ws_wins <- function(.data) {
   ee = merge(.data, ws_players, by=c("yearID", "playerID"), all.x=TRUE) %>%
     replace_na(list(WSWin='N')) %>%
     mutate(WSWin=as.numeric(ifelse(WSWin=='Y', 1, 0)))
+}
 
+#' append WS wins
+append_war_rank <- function(war_df) {
+  war_df %>%
+    group_by(playerID) %>%
+    mutate(WAR=as.numeric(WAR)) %>%
+    arrange(-WAR) %>%
+    dplyr::mutate(war_rank=row_number()) %>%
+    ungroup() %>% arrange(playerID, yearID)
+}
+
+filter_by_years <- function(war_df, min_year=10) {
+  war_df %>%
+    group_by(playerID) %>%
+    mutate(nyear=max(war_rank)) %>%
+    filter(nyear >= min_year) %>%
+    ungroup() %>%
+    dplyr::select(-nyear)
 }
 
 #' fit data
@@ -285,4 +303,35 @@ get_fit_data <- function(.data,
   kkg %>% filter(playerID!='rosepe01', playerID!='jacksjo01')
 
 }
+
+convert_to_factors <- function(dfX,
+                               factors_list=c("^AllStar", "^MVPWin", "^WSWin")) {
+
+  cc <- unlist(lapply(factors_list, grep, names(dfX)))
+  for (i in seq_along(cc)) {
+    c1 <- cc[i]
+    dfX[,c1] <- as.factor(unlist(dfX[,c1]))
+  }
+
+  dfX[,!(sapply(dfX, nlevels) == 1)]
+
+}
+
+compute_jaws <- function(war_df) {
+  jaws_df <- war_df %>%
+    group_by(playerID) %>%
+    mutate(WAR=as.numeric(WAR)) %>%
+    arrange(-WAR) %>%
+    dplyr::mutate(war_rank=row_number(),
+                  ipeak=as.integer(war_rank<=7),
+                  nyear=max(war_rank)) %>%
+    group_by(playerID, votedBy, POS) %>%
+    dplyr::summarise(last_year=max(yearID),
+                     nyear=mean(nyear),
+                     cwar=sum(WAR),
+                     pwar=sum(ipeak*WAR),
+                     jaws=0.5*(cwar+pwar)) %>%
+    ungroup()
+}
+
 
