@@ -304,6 +304,42 @@ get_fit_data <- function(.data,
 
 }
 
+get_aggregated_fit_df <-
+  function(fit_df,
+           keys_to_aggregate=c('^AllStar_',
+                               '^AllStarStart_',
+                               '^WSWin_', '^MVPWin_',
+                               '^MVPShare_'),
+           keys_to_keep=c("^playerID$",
+                          "^inducted$",
+                          "^POS$",
+                          "^WAR_[0-9]+$")) {
+
+    i = 0
+    for (k in keys_to_keep) {
+      nx <- nrow((fit_df[,grepl(k, nn)]))
+      if (i==0) {
+        dfX <- fit_df[,grepl(k, nn)]
+      } else {
+        dfX <- cbind.data.frame(dfX, fit_df[,grepl(k, nn)])
+      }
+      i <- i + 1
+    }
+
+    for (k in keys_to_aggregate) {
+      nk <- str_replace_all(k, '\\^|_', '')
+      cc <- grep(k, names(fit_df))
+      agg1 <- rowSums(fit_df[,cc])
+      dfX[[nk]] <- agg1
+    }
+
+    k = '^WAR_'
+    cc = grep(k, names(dfX))
+    dfX$CWAR <- rowSums(dfX[,cc])
+
+    dfX
+  }
+
 convert_to_factors <- function(dfX,
                                factors_list=c("^AllStar", "^MVPWin", "^WSWin")) {
 

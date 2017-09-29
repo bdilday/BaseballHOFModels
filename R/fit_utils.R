@@ -1,8 +1,8 @@
 
+br_war <- readRDS('inst/extdata/br_war.rds')
+#load('./data/br_war.RData')
 
-load('./data/br_war.RData')
-
-bb <- get_lahman_batting()
+bb <- get_lahman_batting() %>% as_tibble()
 bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
 
 bb <- append_age(bb)
@@ -24,6 +24,9 @@ bb <- append_mvps(bb)
 bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
 
 bb <- append_all_star(bb)
+bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
+
+bb <- append_war_rank(bb)
 bb %>% filter(playerID=='aaronha01') %>% count(playerID, yearID, sort=TRUE)
 
 tmp <- bb %>% filter(POS!='P')
