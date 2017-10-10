@@ -5,8 +5,12 @@ library(readr)
 pull_br_data <- function() {
   bref_bat_url = 'http://www.baseball-reference.com/data/war_daily_bat.txt'
   bref_pitch_url = 'http://www.baseball-reference.com/data/war_daily_pitch.txt'
-  br_bat_war <- read_csv(bref_bat_url)
-  br_pitch_war <- read_csv(bref_pitch_url)
+
+  dtype <- "ciiciciccicdddddddddddddddddddddddccddddddddddddd"
+  br_bat_war <- read_csv(bref_bat_url, col_types = dtype)
+
+  dtype <- "ciiciciciiiddidddiddiddddddddddddddddddddd"
+  br_pitch_war <- read_csv(bref_pitch_url, col_types = dtype)
   list(BattingWAR=br_bat_war, PitchingWAR=br_pitch_war)
 }
 
@@ -25,6 +29,6 @@ combine_bat_pitch <- function(.data) {
     select(player_ID, year_ID, WAR) %>%
     group_by(player_ID, year_ID) %>%
     summarise(WAR=sum(as.numeric(WAR)))
-  
+
 }
 

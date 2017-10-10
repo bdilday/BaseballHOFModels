@@ -315,6 +315,7 @@ get_aggregated_fit_df <-
                           "^POS$",
                           "^WAR_[0-9]+$")) {
 
+    nn <- names(fit_df)
     i = 0
     for (k in keys_to_keep) {
       nx <- nrow((fit_df[,grepl(k, nn)]))
@@ -327,7 +328,7 @@ get_aggregated_fit_df <-
     }
 
     for (k in keys_to_aggregate) {
-      nk <- str_replace_all(k, '\\^|_', '')
+      nk <- stringr::str_replace_all(k, '\\^|_', '')
       cc <- grep(k, names(fit_df))
       agg1 <- rowSums(fit_df[,cc])
       dfX[[nk]] <- agg1
@@ -370,4 +371,12 @@ compute_jaws <- function(war_df) {
     ungroup()
 }
 
+normalize_war <- function(dfX) {
+  cc <- which(grepl('^WAR_', names(dfX)))
+  tmp <- dfX %>% filter(WAR_1>0)
+  tmp <- na.omit(tmp)
+  tmp[,cc] <- tmp[,cc] / tmp$WAR_1
+  tmp
+
+}
 
