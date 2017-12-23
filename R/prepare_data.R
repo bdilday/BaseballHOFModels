@@ -1,6 +1,7 @@
-library(tidyverse)
+library(dplyr)
+library(tidyr)
 library(Lahman)
-library(tensorflow)
+#library(tensorflow)
 library(randomForest)
 library(xgboost)
 library(glmnet)
@@ -31,20 +32,20 @@ filter_by_retirement_year <- function(.data) {
 #' applies to batting or pitching
 combine_war_stints <- function(.data) {
   .data %>%
-    gather(key, value, -player_ID, -year_ID, -stint_ID) %>%
+    tidyr::gather(key, value, -player_ID, -year_ID, -stint_ID) %>%
     dplyr::group_by(player_ID, year_ID, key) %>%
     dplyr::mutate(value=as.numeric(value)) %>%
     dplyr::summarise(value=sum(value, na.rm=TRUE)) %>%
-    spread(key, value) %>%
+    tidyr::spread(key, value) %>%
     ungroup()
 }
 
 combine_lahman_pitching_stints <- function(batting) {
   batting %>%
-    gather(key, value, -playerID, -yearID, -stint, -teamID, -lgID) %>%
+    tidyr::gather(key, value, -playerID, -yearID, -stint, -teamID, -lgID) %>%
     dplyr::group_by(playerID, yearID, key) %>%
     dplyr::summarise(value=sum(value, na.rm=TRUE)) %>%
-    spread(key, value) %>%
+    tidyr::spread(key, value) %>%
     dplyr::mutate(RA9=27*R/IPouts) %>%
     ungroup()
 }
@@ -58,10 +59,10 @@ combine_lahman_batting_stints <- function(batting) {
                     1.6*X3B +
                     2.0*HR) %>%
     dplyr::mutate(wwoba=BASIC_WOBA*PA) %>%
-    gather(key, value, -playerID, -yearID, -stint, -teamID, -lgID) %>%
+    tidyr::gather(key, value, -playerID, -yearID, -stint, -teamID, -lgID) %>%
     dplyr::group_by(playerID, yearID, key) %>%
     dplyr::summarise(value=sum(value, na.rm=TRUE)) %>%
-    spread(key, value) %>%
+    tidyr::spread(key, value) %>%
     dplyr::mutate(SlugPct=TB/AB,
                   OBP=(H+BB+HBP)/PA,
                   BA=H/AB, BASIC_WOBA=wwoba/PA,
@@ -121,8 +122,8 @@ append_hof <- function(.data) {
     dplyr::select(playerID, inducted, votedBy)
 
   .data %>% merge(hofers, by="playerID", all.x=TRUE) %>%
-    replace_na(list(inducted='N')) %>%
-    replace_na(list(votedBy='N')) %>%
+    tidyr::replace_na(list(inducted='N')) %>%
+    tidyr::replace_na(list(votedBy='N')) %>%
     mutate(votedBy=ifelse(votedBy %in% c("BBWAA", "Special Election"), "BBWAA", votedBy)) %>%
     mutate(votedBy=ifelse(votedBy %in% c("BBWAA", "N"), votedBy, "VetCom")) %>%
     mutate(inducted=as.factor(inducted), votedBy=as.factor(votedBy))
@@ -162,9 +163,9 @@ append_mvps <- function(.data) {
 
   kk <- .data %>%
     merge(mvps, by=c("playerID", "yearID"), all.x=TRUE) %>%
-    replace_na(list(MVPWin='N')) %>%
+    tidyr::replace_na(list(MVPWin='N')) %>%
     merge(mvp_shares, by=c("playerID", "yearID"), all.x=TRUE) %>%
-    replace_na(list(MVPShare=0.0)) %>%
+    tidyr::replace_na(list(MVPShare=0.0)) %>%
     dplyr::mutate(MVPWin = ifelse(MVPWin=='Y', 1, 0), MPVWin=as.numeric(MVPWin))
 }
 
@@ -179,7 +180,7 @@ append_all_star <- function(.data) {
     select(playerID, yearID, AllStar, AllStarStart)
 
   .data %>% merge(all_stars, by=c("playerID", "yearID"), all.x=TRUE) %>%
-    replace_na(list(AllStar='N', AllStarStart='N')) %>%
+    tidyr::replace_na(list(AllStar='N', AllStarStart='N')) %>%
     mutate(AllStar=as.numeric(ifelse(AllStar=='Y', 1, 0)),
            AllStarStart=as.numeric(ifelse(AllStarStart=='Y', 1, 0))
            )
@@ -203,7 +204,7 @@ append_ws_wins <- function(.data) {
     select(playerID, yearID, WSWin)
 
   ee = merge(.data, ws_players, by=c("yearID", "playerID"), all.x=TRUE) %>%
-    replace_na(list(WSWin='N')) %>%
+    tidyr::replace_na(list(WSWin='N')) %>%
     mutate(WSWin=as.numeric(ifelse(WSWin=='Y', 1, 0)))
 }
 
@@ -265,7 +266,7 @@ get_fit_data <- function(.data,
   col_factors <- names(kk)[sapply(kk, is.factor)]
 
   kkg <- kk %>%
-    gather(key, value,
+    tidyr::gather(key, value,
            -playerID,
            -yearID,
            -nyear,
@@ -275,7 +276,7 @@ get_fit_data <- function(.data,
 
   kkg %<>%
     select(-key, -nyear, -yearID) %>%
-    spread(new_key, value, fill=0)
+    tidyr::spread(new_key, value, fill=0)
 
   #TODO: find a better way to accomplish this
   # specifically, because I'm gathering both numeric and factor columns,
